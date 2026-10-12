@@ -51,4 +51,53 @@ describe('useTicketList', () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data?.items).toHaveLength(1);
   });
+
+  it('sends a request immediately when the status changes', async () => {
+    const { result } = renderHook(() => useTicketList());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getTickets).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.updateFilters({ status: 'InProgress' });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getTickets).toHaveBeenCalledTimes(2);
+    expect(getTickets).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'InProgress' }),
+    );
+  });
+
+  it('keeps the chosen status when the search is typed and cleared', async () => {
+    const { result } = renderHook(() => useTicketList());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    act(() => result.current.updateFilters({ status: 'InProgress' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    act(() => result.current.updateFilters({ search: 'invoice' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getTickets).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'InProgress', search: 'invoice' }),
+    );
+
+    act(() => result.current.updateFilters({ search: '' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getTickets).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'InProgress', search: '' }),
+    );
+  });
 });
