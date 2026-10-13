@@ -146,13 +146,13 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock) : ITicketQu
             source = source.Where(x => x.Ticket.AssignedAgentId == null);
         }
 
-        var search = query.Search?.Trim();
+        var search = query.Search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrEmpty(search))
         {
             source = source.Where(x =>
-                x.Ticket.Title.Contains(search)
-                || x.Ticket.Reference.Contains(search)
-                || x.Customer.Name.Contains(search));
+                x.Ticket.Title.ToLower().Contains(search)
+                || x.Ticket.Reference.ToLower().Contains(search)
+                || x.Customer.Name.ToLower().Contains(search));
         }
 
         return source;
