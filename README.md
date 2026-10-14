@@ -71,7 +71,10 @@ credentials.**
 npm test                      # dotnet test, then the web tests (Vitest)
 ```
 
-Both pass on a clean checkout and neither needs a database.
+Both pass on a clean checkout and neither needs a database. SQLite query tests cover the
+`NotApplicable`, `Met`, and `Breached` SLA filters. `AtRisk` and `WithinSla` use SQL Server's
+`DateDiffSecond` translation and are verified against the SQL Server API; they cannot run in
+SQLite.
 
 ## Commands
 
@@ -87,9 +90,11 @@ Both pass on a clean checkout and neither needs a database.
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/tickets` | Paged list with `search`, `status`, `priority`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, `sortDirection`. **Filters are accepted but not applied yet** (Task 1). |
+| `GET /api/tickets` | Paged list with `search`, `status`, `priority`, `slaStatus`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, `sortDirection`. Filters and count are applied server-side. |
 | `GET /api/tickets/{id}` | One ticket |
-| `POST /api/tickets` | Create a ticket |
+| `POST /api/tickets` | Create a ticket with automatic priority, SLA, and agent triage |
+| `POST /api/tickets/{id}/escalate` | Escalate a ticket and return the updated ticket plus its history row |
+| `GET /api/tickets/{id}/escalations` | List a ticket's escalation history, newest first |
 | `PATCH /api/tickets/{id}/status` · `/assignment` | Change status / assignee |
 | `GET /api/customers` · `/api/agents` · `/api/categories` | Reference data |
 
@@ -97,6 +102,42 @@ Errors are `ProblemDetails`: `400` validation, `404` not found, `409` conflict o
 
 **Seed data:** 5 categories, 6 customers (3 Premium), 6 agents (one inactive, one at their limit)
 and 40 tickets across every status, priority and SLA state.
+
+**SLA window decision:** The configured minimum window applies only after reducing a Premium
+customer's base SLA window. Standard customers keep the configured base window unchanged; the
+shortest configured base window is 4 hours.
+
+**SLA filtering decision:** The SQL list filter duplicates the status boundaries from
+`SlaEvaluator`, because EF cannot translate a call into the C# evaluator inside a database
+`Where`. Keep the SQL expression and evaluator in sync; boundary tests cover their shared rules.
+
+**Escalation design decisions:** Escalation history is a separate immutable entity rather than
+a collection on `Ticket`, so growing history does not make the aggregate carry an unbounded
+collection. `Ticket.Escalate` enforces the escalation guards, raises priority one level, applies
+the due date and assignee computed by the caller, and returns the history row for persistence in
+the same transaction. The `TicketId` index supports listing history for one ticket. Restricting
+deletes through ticket and agent foreign keys prevents referenced history from being silently
+removed. Input validation (reason length and actor) belongs at the request boundary; domain
+business-rule violations map to HTTP 409. History lookup is newest-first using the deliberate
+composite `(TicketId, EscalatedAtUtc)` index; EF also creates default indexes for the two agent
+foreign keys, which are not query-specific indexes.
+
+The escalation response is a wrapper containing both the updated ticket and its recorded
+escalation row, rather than returning either object alone, so clients receive the refreshed ticket
+state and the audit entry from the same operation.
+
+## Known limitations
+
+SLA risk after an escalation is evaluated using the original creation time and the current due
+date (`due - created`) as the window. A ticket escalated several days after creation can therefore
+show At risk immediately even when its recalculated due date is hours away. Measuring from the
+most recent escalation would be more precise, but requires recording that timestamp to evaluate
+the status and complicates the SQL SLA filter.
+
+The SQL `AtRisk` and `WithinSla` filters use `DateDiffSecond`, while `SlaEvaluator` compares
+exact ticks. A ticket within one second of the at-risk boundary can therefore be classified
+differently by the list filter and the projected SLA status; this precision difference is accepted
+for filtering.
 
 ## Troubleshooting
 
