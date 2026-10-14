@@ -48,6 +48,27 @@ export interface AgentSummary {
   fullName: string;
 }
 
+export interface Triage {
+  appliedPriority: TicketPriority;
+  priorityReason: string;
+  slaWindowHours: number;
+  slaReason: string;
+  assignmentReason: string;
+}
+
+export interface Escalation {
+  id: number;
+  fromPriority: TicketPriority;
+  toPriority: TicketPriority;
+  fromAgent: AgentSummary | null;
+  toAgent: AgentSummary | null;
+  fromDueAtUtc: string | null;
+  toDueAtUtc: string;
+  reason: string;
+  escalatedBy: string;
+  escalatedAtUtc: string;
+}
+
 export interface TicketListItem {
   id: number;
   reference: string;
@@ -64,6 +85,15 @@ export interface TicketListItem {
   slaStatus: SlaStatus;
 }
 
+export interface EscalateResponse {
+  ticket: TicketDetail;
+  escalation: Escalation;
+}
+
+/** Same limits as the server's EscalateTicketRequestValidator. */
+export const ESCALATION_REASON_MIN = 5;
+export const ESCALATION_REASON_MAX = 500;
+
 export interface TicketDetail {
   id: number;
   reference: string;
@@ -79,6 +109,7 @@ export interface TicketDetail {
   dueAtUtc: string | null;
   resolvedAtUtc: string | null;
   slaStatus: SlaStatus;
+  triage?: Triage | null;
 }
 
 /** Everything the ticket list screen can narrow the results by. */
@@ -86,6 +117,7 @@ export interface TicketFilters {
   search: string;
   status?: TicketStatus;
   priority?: TicketPriority;
+  slaStatus?: SlaStatus;
   categoryId?: number;
   customerId?: number;
   assignedAgentId?: number;

@@ -73,6 +73,25 @@ describe('useTicketList', () => {
     );
   });
 
+  it('sends a request immediately when the SLA status changes', async () => {
+    const { result } = renderHook(() => useTicketList());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    act(() => {
+      result.current.updateFilters({ slaStatus: 'AtRisk' });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getTickets).toHaveBeenLastCalledWith(
+      expect.objectContaining({ slaStatus: 'AtRisk' }),
+    );
+  });
+
   it('keeps the chosen status when the search is typed and cleared', async () => {
     const { result } = renderHook(() => useTicketList());
     await act(async () => {
