@@ -48,6 +48,26 @@ public sealed class Ticket : AggregateRoot
     /// <summary>True while the ticket still needs work from an agent.</summary>
     public bool IsOpen => Status is not (TicketStatus.Resolved or TicketStatus.Closed);
 
+    /// <summary>The priority an escalation would move this ticket to, or null if it cannot go higher.</summary>
+    public TicketPriority? NextPriority =>
+        Priority == TicketPriority.Critical ? null : (TicketPriority)((int)Priority + 1);
+
+    /// <exception cref="BusinessRuleViolationException">The ticket is Resolved, Closed or already Critical.</exception>
+    public void EnsureCanEscalate()
+    {
+        if (!IsOpen)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is {Status} and cannot be escalated.");
+        }
+
+        if (Priority == TicketPriority.Critical)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is already Critical and cannot be escalated further.");
+        }
+    }
+
     /// <summary>
     /// Raises a new ticket for a customer. It starts as <see cref="TicketStatus.New"/> with no owner.
     /// </summary>
@@ -135,19 +155,8 @@ public sealed class Ticket : AggregateRoot
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
         ArgumentException.ThrowIfNullOrWhiteSpace(escalatedBy);
 
-        if (!IsOpen)
-        {
-            throw new BusinessRuleViolationException(
-                $"Ticket {Reference} is {Status} and cannot be escalated.");
-        }
-
-        if (Priority == TicketPriority.Critical)
-        {
-            throw new BusinessRuleViolationException(
-                $"Ticket {Reference} is already Critical and cannot be escalated further.");
-        }
-
-        var raised = (TicketPriority)((int)Priority + 1);
+        EnsureCanEscalate();
+        var raised = NextPriority!.Value;
 
         var record = TicketEscalation.Record(
             Id,
