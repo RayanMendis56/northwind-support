@@ -26,11 +26,9 @@ public sealed class EscalateTicketCommandHandler(
     public async Task<EscalateTicketResponse> HandleAsync(
         int id,
         EscalateTicketRequest request,
+        string actor,
         CancellationToken ct)
     {
-        var actor = request.EscalatedBy
-            ?? throw new InvalidOperationException("EscalatedBy must be validated before this handler runs.");
-
         var ticket = await tickets.GetByIdAsync(id, ct) ?? throw new NotFoundException("Ticket", id);
         var category = await categories.GetByIdAsync(ticket.CategoryId, ct)
             ?? throw new NotFoundException("Category", ticket.CategoryId);

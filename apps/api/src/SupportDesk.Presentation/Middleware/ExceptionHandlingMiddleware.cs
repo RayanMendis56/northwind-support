@@ -43,6 +43,11 @@ public sealed class ExceptionHandlingMiddleware(
             await WriteAsync(context, Problem("Conflict", exception.Message, StatusCodes.Status409Conflict),
                 StatusCodes.Status409Conflict);
         }
+        catch (AuthenticationFailedException exception)
+        {
+            await WriteAsync(context, Problem("Unauthorized", exception.Message, StatusCodes.Status401Unauthorized),
+                StatusCodes.Status401Unauthorized);
+        }
         catch (BusinessRuleViolationException exception)
         {
             await WriteAsync(context, Problem("Conflict", exception.Message, StatusCodes.Status409Conflict),

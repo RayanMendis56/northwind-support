@@ -4,6 +4,7 @@ using SupportDesk.Application.Features.Agents.Queries.GetAgents;
 using SupportDesk.Application.Features.Categories.Queries.GetCategories;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomer;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomers;
+using SupportDesk.Application.Features.Auth.Login;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
 using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
@@ -26,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<ChangeTicketStatusCommandHandler>();
         services.AddScoped<EscalateTicketCommandHandler>();
         services.AddScoped<AssignTicketCommandHandler>();
+        services.AddScoped<LoginCommandHandler>();
         services.AddScoped<TriageService>();
         services.AddScoped<SearchTicketsQueryHandler>();
         services.AddScoped<GetTicketQueryHandler>();

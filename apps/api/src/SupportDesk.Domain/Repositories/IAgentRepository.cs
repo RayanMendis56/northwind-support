@@ -10,6 +10,8 @@ public interface IAgentRepository
 {
     Task<Agent?> GetByIdAsync(int id, CancellationToken ct);
 
+    Task<Agent?> GetByEmailAsync(string email, CancellationToken ct);
+
     /// <summary>
     /// Every agent as the selector sees them. Open tickets exclude <paramref name="excludingTicketId"/>,
     /// so an agent is not penalised for the ticket being re-evaluated.

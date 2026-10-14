@@ -2,8 +2,8 @@ using SupportDesk.Domain.Aggregates.Tickets;
 
 namespace SupportDesk.Application.Contracts.Tickets;
 
-/// <summary>Body of POST /api/tickets/{id}/escalate. EscalatedBy is replaced by the token in Task 3.</summary>
-public sealed record EscalateTicketRequest(string Reason, string? EscalatedBy);
+/// <summary>Body of POST /api/tickets/{id}/escalate.</summary>
+public sealed record EscalateTicketRequest(string Reason);
 
 /// <summary>Why a ticket got the priority, due date and owner it did.</summary>
 public sealed record TriageDto(

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using SupportDesk.Application.Auth;
 using SupportDesk.Application.Contracts.Common;
 using SupportDesk.Application.Contracts.Tickets;
+using SupportDesk.Application.Exceptions;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
 using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
@@ -65,8 +67,13 @@ public sealed class TicketsController : ControllerBase
         int id,
         EscalateTicketRequest request,
         [FromServices] EscalateTicketCommandHandler handler,
-        CancellationToken ct) =>
-        handler.HandleAsync(id, request, ct);
+        CancellationToken ct)
+    {
+        var actor = User.FindFirst(AuthClaims.Email)?.Value
+            ?? throw new AuthenticationFailedException("The token does not identify an agent.");
+
+        return handler.HandleAsync(id, request, actor, ct);
+    }
 
     /// <summary>Returns a ticket's escalation history, newest first.</summary>
     [HttpGet("{id:int}/escalations")]
