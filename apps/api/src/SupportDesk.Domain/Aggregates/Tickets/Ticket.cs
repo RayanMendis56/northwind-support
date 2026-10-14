@@ -117,4 +117,55 @@ public sealed class Ticket : AggregateRoot
         DueAtUtc = dueAtUtc;
         UpdatedAtUtc = nowUtc;
     }
+
+    /// <summary>
+    /// Raises the priority one level and moves the ticket to the due date and owner the caller
+    /// worked out for that new level. Returns the history record, which the caller must save.
+    /// </summary>
+    /// <exception cref="BusinessRuleViolationException">
+    /// The ticket is already Critical, Resolved, or Closed.
+    /// </exception>
+    public TicketEscalation Escalate(
+        string reason,
+        string escalatedBy,
+        DateTime newDueAtUtc,
+        int? newAgentId,
+        DateTime nowUtc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        ArgumentException.ThrowIfNullOrWhiteSpace(escalatedBy);
+
+        if (!IsOpen)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is {Status} and cannot be escalated.");
+        }
+
+        if (Priority == TicketPriority.Critical)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is already Critical and cannot be escalated further.");
+        }
+
+        var raised = (TicketPriority)((int)Priority + 1);
+
+        var record = TicketEscalation.Record(
+            Id,
+            Priority,
+            raised,
+            AssignedAgentId,
+            newAgentId,
+            DueAtUtc,
+            newDueAtUtc,
+            reason,
+            escalatedBy,
+            nowUtc);
+
+        Priority = raised;
+        DueAtUtc = newDueAtUtc;
+        AssignedAgentId = newAgentId;
+        UpdatedAtUtc = nowUtc;
+
+        return record;
+    }
 }
