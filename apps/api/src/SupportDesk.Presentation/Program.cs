@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using SupportDesk.Application;
+using SupportDesk.Domain.Triage;
 using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
@@ -29,6 +30,13 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+var slaOptions = builder.Configuration.GetSection(SlaOptions.SectionName).Get<SlaOptions>()
+    ?? throw new InvalidOperationException(
+        $"Configuration section '{SlaOptions.SectionName}' is missing.");
+slaOptions.Validate();
+builder.Services.AddSingleton(slaOptions);
+builder.Services.AddSingleton<SlaCalculator>();
 
 var app = builder.Build();
 

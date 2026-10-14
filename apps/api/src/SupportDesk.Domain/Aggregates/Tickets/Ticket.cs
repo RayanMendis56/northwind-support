@@ -49,8 +49,7 @@ public sealed class Ticket : AggregateRoot
     public bool IsOpen => Status is not (TicketStatus.Resolved or TicketStatus.Closed);
 
     /// <summary>
-    /// Raises a new ticket for a customer. It starts as <see cref="TicketStatus.New"/>, with no
-    /// owner and no due date.
+    /// Raises a new ticket for a customer. It starts as <see cref="TicketStatus.New"/> with no owner.
     /// </summary>
     public static Ticket Raise(
         string reference,
@@ -109,6 +108,13 @@ public sealed class Ticket : AggregateRoot
     public void AssignTo(int? agentId, DateTime nowUtc)
     {
         AssignedAgentId = agentId;
+        UpdatedAtUtc = nowUtc;
+    }
+
+    /// <summary>Sets or recalculates the due date and records when that SLA change occurred.</summary>
+    public void SetDueAtUtc(DateTime dueAtUtc, DateTime nowUtc)
+    {
+        DueAtUtc = dueAtUtc;
         UpdatedAtUtc = nowUtc;
     }
 }

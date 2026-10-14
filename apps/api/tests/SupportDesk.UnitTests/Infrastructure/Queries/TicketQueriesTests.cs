@@ -5,6 +5,7 @@ using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
 using SupportDesk.Domain.Aggregates.Tickets;
+using SupportDesk.Domain.Triage;
 using SupportDesk.Infrastructure.Data;
 using SupportDesk.Infrastructure.Queries;
 using SupportDesk.UnitTests.TestDoubles;
@@ -101,7 +102,10 @@ public sealed class TicketQueriesTests
         {
             _connection = connection;
             Db = db;
-            Queries = new TicketQueries(db, new FixedClock());
+            Queries = new TicketQueries(db, new FixedClock(), new SlaOptions
+            {
+                AtRiskThresholdPercent = 25
+            });
         }
 
         public SupportDbContext Db { get; }
