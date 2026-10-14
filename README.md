@@ -126,7 +126,9 @@ Compare it with the SDK image using `docker image ls mcr.microsoft.com/dotnet/sd
   follow-up source-edit/cache-hit check has not yet been verified.
 - **Compose startup:** `docker compose config --quiet` succeeded. A clean-volume end-to-end
   startup and HTTP checks remain unverified because Docker Desktop reported that it could not
-  start and its containerd metadata filesystem was read-only during API container creation. The
+  start and its containerd metadata filesystem was read-only during API container creation.
+  At the time of checking, the host data volume had only 8.5 GiB free (96% used), which may
+  have contributed; the Docker failure was not confirmed to be caused by disk space. The
   existing SQL volume was preserved.
 
 When Docker is available, verify a disposable clean database with
