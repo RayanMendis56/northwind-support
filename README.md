@@ -74,7 +74,9 @@ npm test                      # dotnet test, then the web tests (Vitest)
 Both pass on a clean checkout and neither needs a database. SQLite query tests cover the
 `NotApplicable`, `Met`, and `Breached` SLA filters. `AtRisk` and `WithinSla` use SQL Server's
 `DateDiffSecond` translation and are verified against the SQL Server API; they cannot run in
-SQLite.
+SQLite. An SQLite repository test also covers `AgentRepository.GetCandidatesAsync`: grouped
+open-ticket counts exclude resolved/closed tickets and can omit the ticket currently being
+escalated.
 
 ## Commands
 
