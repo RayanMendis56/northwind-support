@@ -8,12 +8,11 @@ import { escalationBlockedReason, validateReason } from '../escalationRules';
 
 interface EscalationPanelProps {
   ticket: TicketDetail;
-  escalatedBy: string;
   onEscalated: (result: EscalateResponse) => void;
 }
 
 /** Escalates a ticket with a reason. Validates the server's rules before calling the API. */
-export function EscalationPanel({ ticket, escalatedBy, onEscalated }: EscalationPanelProps) {
+export function EscalationPanel({ ticket, onEscalated }: EscalationPanelProps) {
   const [reason, setReason] = useState('');
   const [fieldError, setFieldError] = useState<string>();
   const [submitError, setSubmitError] = useState<string>();
@@ -35,7 +34,7 @@ export function EscalationPanel({ ticket, escalatedBy, onEscalated }: Escalation
     setIsSaving(true);
 
     try {
-      const result = await ticketsApi.escalate(ticket.id, reason.trim(), escalatedBy);
+      const result = await ticketsApi.escalate(ticket.id, reason.trim());
       setReason('');
       onEscalated(result);
     } catch (caught) {

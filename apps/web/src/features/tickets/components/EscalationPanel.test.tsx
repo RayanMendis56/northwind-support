@@ -19,7 +19,7 @@ describe('EscalationPanel', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('blocks a too-short reason, shows the field error and does not call the API', () => {
-    render(<EscalationPanel ticket={ticketDetail()} escalatedBy="alex.lead" onEscalated={vi.fn()} />);
+    render(<EscalationPanel ticket={ticketDetail()} onEscalated={vi.fn()} />);
 
     type('ok');
     fireEvent.click(screen.getByRole('button', { name: /escalate ticket/i }));
@@ -34,14 +34,14 @@ describe('EscalationPanel', () => {
     const onEscalated = vi.fn();
 
     render(
-      <EscalationPanel ticket={ticketDetail()} escalatedBy="alex.lead" onEscalated={onEscalated} />,
+      <EscalationPanel ticket={ticketDetail()} onEscalated={onEscalated} />,
     );
 
     type('The whole site is down');
     fireEvent.click(screen.getByRole('button', { name: /escalate ticket/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(message);
-    expect(escalate).toHaveBeenCalledWith(12, 'The whole site is down', 'alex.lead');
+    expect(escalate).toHaveBeenCalledWith(12, 'The whole site is down');
     expect(onEscalated).not.toHaveBeenCalled();
   });
 
@@ -49,7 +49,6 @@ describe('EscalationPanel', () => {
     render(
       <EscalationPanel
         ticket={ticketDetail({ priority: 'Critical' })}
-        escalatedBy="alex.lead"
         onEscalated={vi.fn()}
       />,
     );

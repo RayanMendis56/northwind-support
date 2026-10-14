@@ -81,7 +81,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 
-    // Keeps a developer machine one command away from a working database.
+    // Local and Compose development starts with a migrated, seeded database.
     await app.MigrateAndSeedAsync();
 }
 
@@ -93,3 +93,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

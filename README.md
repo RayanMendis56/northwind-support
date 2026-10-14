@@ -88,6 +88,72 @@ escalated.
 | `npm run lint` / `typecheck` / `format` | Web lint and types / `dotnet format` |
 | `npm run ef -- migrations add <Name>` | Add an EF Core migration |
 
+## Task 4 - Dockerisation & Production Strategy
+
+The API image is built from the repository root so its .NET project references and central
+package configuration are available:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Compose starts SQL Server and waits for its health check before starting the API. The API is
+available at `http://localhost:5080`; its anonymous `GET /health` endpoint checks database
+reachability. In the container, `ASPNETCORE_ENVIRONMENT=Development` applies migrations and
+seeds the demo data before the API accepts requests. Set `MSSQL_SA_PASSWORD` and `Jwt__Key` in
+`.env` for local overrides; the example values are development fixtures only. To point the web
+dev server at this container, run `VITE_API_PROXY_TARGET=http://localhost:5080 npm run web`.
+
+The multi-stage Dockerfile restores from the copied project/build configuration before copying
+source, then publishes into the ASP.NET runtime image. The final image runs as the non-root `app`
+user, exposes HTTP port 8080, and uses `/health` for its container health check. A local build
+produced a 493 MB runtime image (492,855,542 bytes; `docker image ls northwind-support-api`).
+Compare it with the SDK image using `docker image ls mcr.microsoft.com/dotnet/sdk`.
+
+### Docker Build & Verification
+
+- **Non-root user:** The runtime image uses ASP.NET's `app` user and listens on port 8080 inside
+  the container. The intended runtime check is `docker compose exec api whoami` (`app`).
+- **Health check:** Anonymous `GET /health` uses `db.Database.CanConnectAsync()` to report
+  database connectivity. It is also the Docker health check.
+- **Image size:** The locally built `northwind-support-api:latest` image measured
+  492,855,542 bytes (about 493 MB) with `docker image inspect`. The Docker daemon was unavailable
+  when attempting to measure the SDK and base ASP.NET images; no estimated image sizes are
+  presented as measurements.
+- **Layer caching:** The Dockerfile copies shared build configuration and project files and
+  restores packages before copying source code. `docker compose build api` succeeded once; the
+  follow-up source-edit/cache-hit check has not yet been verified.
+- **Compose startup:** `docker compose config --quiet` succeeded. A clean-volume end-to-end
+  startup and HTTP checks remain unverified because Docker Desktop reported that it could not
+  start and its containerd metadata filesystem was read-only during API container creation. The
+  existing SQL volume was preserved.
+
+When Docker is available, verify a disposable clean database with
+`docker compose down -v && docker compose up --build -d`, then run:
+
+```bash
+curl -i http://localhost:5080/health
+curl -i http://localhost:5080/api/tickets
+docker compose exec api whoami
+VITE_API_PROXY_TARGET=http://localhost:5080 npm run web
+docker image ls | grep -E 'dotnet/sdk|dotnet/aspnet|supportdesk-api'
+```
+
+Expected results are `200` and a healthy/connected body from `/health`, `401` from `/api/tickets`
+without a token, and `app` from `whoami`. The image-list command compares the local SDK,
+ASP.NET runtime and application image sizes. To check restore caching, change a `.cs` file and
+run `docker compose build --progress plain api`; the restore layer should be marked `CACHED`.
+
+### Production Database Migration Strategy
+
+Automatic migrations and demo seeding run only in Development (including this Compose setup).
+Production startup does not run migrations. In production, run reviewed EF Core migrations in an
+isolated, authorized pre-deployment release step using a database identity with schema-change
+permissions. This avoids multiple application replicas racing to apply DDL and avoids granting
+schema-migration privileges to the API's runtime database credentials. Seed demo accounts and
+sample tickets are for local assessment use, not production data initialization.
+
 ## API at a glance
 
 | Endpoint | Description |
@@ -99,8 +165,12 @@ escalated.
 | `GET /api/tickets/{id}/escalations` | List a ticket's escalation history, newest first |
 | `PATCH /api/tickets/{id}/status` · `/assignment` | Change status / assignee |
 | `GET /api/customers` · `/api/agents` · `/api/categories` | Reference data |
+| `POST /api/auth/login` | Exchange an agent email and password for a JWT; anonymous |
+| `GET /api/auth/me` | Return the signed-in agent from JWT claims |
 
-Errors are `ProblemDetails`: `400` validation, `404` not found, `409` conflict or business rule.
+All endpoints other than login require a valid bearer token. Swagger remains available in
+Development. Errors are `ProblemDetails`: `400` validation, `401` missing/invalid credentials,
+`404` not found, `409` conflict or business rule.
 
 **Seed data:** 5 categories, 6 customers (3 Premium), 6 agents (one inactive, one at their limit)
 and 40 tickets across every status, priority and SLA state.
@@ -119,14 +189,38 @@ collection. `Ticket.Escalate` enforces the escalation guards, raises priority on
 the due date and assignee computed by the caller, and returns the history row for persistence in
 the same transaction. The `TicketId` index supports listing history for one ticket. Restricting
 deletes through ticket and agent foreign keys prevents referenced history from being silently
-removed. Input validation (reason length and actor) belongs at the request boundary; domain
-business-rule violations map to HTTP 409. History lookup is newest-first using the deliberate
+removed. The reason is validated at the request boundary; the actor is taken from the validated
+JWT. Domain business-rule violations map to HTTP 409. History lookup is newest-first using the deliberate
 composite `(TicketId, EscalatedAtUtc)` index; EF also creates default indexes for the two agent
 foreign keys, which are not query-specific indexes.
 
 The escalation response is a wrapper containing both the updated ticket and its recorded
 escalation row, rather than returning either object alone, so clients receive the refreshed ticket
 state and the audit entry from the same operation.
+
+## Authentication
+
+Credentials are stored on `Agent` as an optional `PasswordHash`, not in a separate users table:
+agents are the only principals in scope, and credentials share the agent's lifecycle. The
+`AddAgentPasswordHash` EF migration adds the nullable column. Passwords use ASP.NET Core Identity's
+`PasswordHasher<Agent>`. The Development seeder hashes a local fixture password at seed time; on
+an already-seeded database it only fills missing hashes for known seed agents and never overwrites
+an existing hash.
+
+All active seeded agents use the obviously local-only password `Dev-Only-Password-1!`. For
+example, sign in as `alex.turner@northwind-support.example`. The seeded Yuki Tanaka account is
+inactive and cannot sign in. Do not reuse these fixture credentials outside local development.
+
+JWTs expire after 60 minutes. Outside Development, provide a random `Jwt__Key` of at least 32
+characters; the API fails at startup if it is missing or too short. The committed key in
+`appsettings.Development.json` is fake and development-only. The web app stores the access token
+and current-user data in `localStorage`, attaches the token as a bearer token to API calls, and
+clears the session on any `401`. `localStorage` persists across reloads and tabs, but JavaScript on
+the origin can read it, so an XSS vulnerability could expose the token. There are no refresh
+tokens; an agent must sign in again after expiry.
+
+Escalation requests contain only a reason. The API takes the actor email from the validated JWT,
+so the caller cannot claim to have escalated as another agent.
 
 ## Known limitations
 
@@ -140,6 +234,11 @@ The SQL `AtRisk` and `WithinSla` filters use `DateDiffSecond`, while `SlaEvaluat
 exact ticks. A ticket within one second of the at-risk boundary can therefore be classified
 differently by the list filter and the projected SLA status; this precision difference is accepted
 for filtering.
+
+Authentication does not include registration, password reset, email verification, OAuth/SSO,
+refresh tokens, MFA, account lockout, or rate limiting. The access token is stored in
+`localStorage` rather than an HttpOnly cookie, so preventing cross-site scripting remains
+important.
 
 ## Troubleshooting
 

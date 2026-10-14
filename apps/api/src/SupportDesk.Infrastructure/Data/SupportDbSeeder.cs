@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SupportDesk.Application.Abstractions;
+using SupportDesk.Domain.Repositories;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
@@ -17,13 +18,30 @@ namespace SupportDesk.Infrastructure.Data;
 /// Every aggregate is built through its own behaviour. The two historical values no behaviour
 /// produces - a ticket's last update and its due date - are set through EF Core directly.
 /// </remarks>
-public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<SupportDbSeeder> logger)
+public sealed class SupportDbSeeder(
+    SupportDbContext db,
+    IClock clock,
+    IPasswordService passwords,
+    ILogger<SupportDbSeeder> logger)
 {
+    public const string DevelopmentPassword = "Dev-Only-Password-1!";
+
+    private static readonly string[] SeedAgentEmails =
+    [
+        "alex.turner@northwind-support.example",
+        "ben.osei@northwind-support.example",
+        "priya.nair@northwind-support.example",
+        "sara.lindqvist@northwind-support.example",
+        "marcus.doyle@northwind-support.example",
+        "yuki.tanaka@northwind-support.example"
+    ];
+
     /// <summary>Seeds the database, unless it already has tickets in it.</summary>
     public async Task SeedAsync(CancellationToken ct = default)
     {
         if (await db.Set<Ticket>().AnyAsync(ct))
         {
+            await EnsureSeedAgentPasswordsAsync(ct);
             logger.LogInformation("Seed data already present; skipping.");
             return;
         }
@@ -33,6 +51,10 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
         var categories = SeedCategories();
         var customers = SeedCustomers(now);
         var agents = SeedAgents(now);
+        foreach (var agent in agents)
+        {
+            agent.SetPasswordHash(passwords.Hash(agent, DevelopmentPassword));
+        }
 
         db.AddRange(categories);
         db.AddRange(customers);
@@ -48,6 +70,24 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
         logger.LogInformation(
             "Seeded {Categories} categories, {Customers} customers, {Agents} agents and {Tickets} tickets.",
             categories.Count, customers.Count, agents.Count, await db.Set<Ticket>().CountAsync(ct));
+    }
+
+    private async Task EnsureSeedAgentPasswordsAsync(CancellationToken ct)
+    {
+        var agents = await db.Set<Agent>()
+            .Where(agent => SeedAgentEmails.Contains(agent.Email) && agent.PasswordHash == null)
+            .ToListAsync(ct);
+
+        foreach (var agent in agents)
+        {
+            agent.SetPasswordHash(passwords.Hash(agent, DevelopmentPassword));
+        }
+
+        if (agents.Count > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Set development passwords for {AgentCount} seeded agents.", agents.Count);
+        }
     }
 
     private static List<Category> SeedCategories() =>

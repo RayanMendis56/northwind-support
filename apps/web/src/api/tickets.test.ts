@@ -40,14 +40,13 @@ describe('ticketsApi', () => {
     expect(mockedRequest).toHaveBeenCalledWith('/tickets/42/escalations');
   });
 
-  it('sends the reason and supplied actor when escalating a ticket', async () => {
-    await ticketsApi.escalate(42, 'Customer impact increased', 'team.lead');
+  it('sends only the reason when escalating a ticket', async () => {
+    await ticketsApi.escalate(42, 'Customer impact increased');
 
     expect(mockedRequest).toHaveBeenCalledWith('/tickets/42/escalate', {
       method: 'POST',
       body: JSON.stringify({
         reason: 'Customer impact increased',
-        escalatedBy: 'team.lead',
       }),
     });
   });

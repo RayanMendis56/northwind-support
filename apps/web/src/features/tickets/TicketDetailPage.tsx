@@ -2,7 +2,6 @@ import { Link, useParams } from 'react-router-dom';
 import { ErrorMessage } from '../../components/ErrorMessage';
 import { Spinner } from '../../components/Spinner';
 import { useReferenceData } from '../../hooks/useReferenceData';
-import { CURRENT_ACTOR } from '../../lib/currentActor';
 import type { EscalateResponse } from '../../types/api';
 import { AssignAgentControl } from './components/AssignAgentControl';
 import { EscalationHistory } from './components/EscalationHistory';
@@ -81,7 +80,6 @@ export function TicketDetailPage() {
 
           <EscalationPanel
             ticket={ticket}
-            escalatedBy={CURRENT_ACTOR}
             onEscalated={handleEscalated}
           />
         </aside>
