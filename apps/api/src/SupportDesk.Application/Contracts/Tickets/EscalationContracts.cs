@@ -24,3 +24,6 @@ public sealed record EscalationDto(
     string Reason,
     string EscalatedBy,
     DateTime EscalatedAtUtc);
+
+/// <summary>Response of POST /api/tickets/{id}/escalate: the updated ticket and the row that was recorded.</summary>
+public sealed record EscalateTicketResponse(TicketDetailDto Ticket, EscalationDto Escalation);

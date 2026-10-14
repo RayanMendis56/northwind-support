@@ -94,6 +94,40 @@ public sealed class TicketQueriesTests
         Assert.All(result.Items, ticket => Assert.Null(ticket.AssignedAgent));
     }
 
+    [Fact]
+    public async Task ExistsAsync_ReportsWhetherTheTicketExists()
+    {
+        await using var fixture = await QueryFixture.CreateAsync();
+
+        Assert.True(await fixture.Queries.ExistsAsync(fixture.TicketId, CancellationToken.None));
+        Assert.False(await fixture.Queries.ExistsAsync(-1, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetEscalationsAsync_ReturnsHistoryWithAgentNamesNewestFirst()
+    {
+        await using var fixture = await QueryFixture.CreateAsync();
+        var ticket = await fixture.Db.Set<Ticket>().SingleAsync(t => t.Id == fixture.TicketId);
+        var escalatedAt = FixedClock.DefaultNow.AddMinutes(5);
+        var record = ticket.Escalate(
+            "Customer impact increased",
+            "team.lead",
+            escalatedAt.AddHours(4),
+            newAgentId: null,
+            escalatedAt);
+        await fixture.Db.Set<TicketEscalation>().AddAsync(record);
+        await fixture.Db.SaveChangesAsync();
+
+        var history = await fixture.Queries.GetEscalationsAsync(fixture.TicketId, CancellationToken.None);
+
+        var escalation = Assert.Single(history);
+        Assert.Equal(TicketPriority.High, escalation.FromPriority);
+        Assert.Equal(TicketPriority.Critical, escalation.ToPriority);
+        Assert.Equal("Alex Turner", escalation.FromAgent?.FullName);
+        Assert.Null(escalation.ToAgent);
+        Assert.Equal("team.lead", escalation.EscalatedBy);
+    }
+
     private sealed class QueryFixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
@@ -115,6 +149,8 @@ public sealed class TicketQueriesTests
         public int ContosoCustomerId { get; private set; }
 
         public int BillingCategoryId { get; private set; }
+
+        public int TicketId { get; private set; }
 
         public static async Task<QueryFixture> CreateAsync()
         {
@@ -162,6 +198,7 @@ public sealed class TicketQueriesTests
 
             Db.AddRange(tickets);
             await Db.SaveChangesAsync();
+            TicketId = tickets[0].Id;
         }
 
         private static Ticket CreateTicket(

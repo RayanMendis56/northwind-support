@@ -3,6 +3,7 @@ using SupportDesk.Application.Exceptions;
 using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
 using SupportDesk.Domain.Aggregates.Tickets;
+using SupportDesk.Domain.Triage;
 using SupportDesk.UnitTests.TestDoubles;
 
 namespace SupportDesk.UnitTests.Application.Features.Tickets.Commands;
@@ -39,6 +40,25 @@ public class RaiseTicketCommandHandlerTests
 
         Assert.NotNull(context.AddedTicket);
         Assert.Equal(TicketPriority.Medium, context.AddedTicket.Priority);
+    }
+
+    [Fact]
+    public async Task HandleAsync_AssignsEligibleAgentAndReturnsTriageDetails()
+    {
+        var context = new TicketCommandTestContext();
+        context.Agents.Setup(a => a.GetCandidatesAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[]
+            {
+                new AgentCandidate(7, IsActive: true, MaxOpenTickets: 5, OpenTickets: 0, new HashSet<int>())
+            });
+
+        var response = await context.RaiseTicket.HandleAsync(Request(TicketPriority.High), CancellationToken.None);
+
+        Assert.NotNull(context.AddedTicket);
+        Assert.Equal(7, context.AddedTicket.AssignedAgentId);
+        Assert.Equal(TicketPriority.High, response.Triage?.AppliedPriority);
+        Assert.Equal(4, response.Triage?.SlaWindowHours);
+        Assert.Equal("Fewest open tickets among available agents", response.Triage?.AssignmentReason);
     }
 
     [Fact]

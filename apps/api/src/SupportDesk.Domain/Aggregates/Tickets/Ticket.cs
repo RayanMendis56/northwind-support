@@ -131,8 +131,8 @@ public sealed class Ticket : AggregateRoot
         UpdatedAtUtc = nowUtc;
     }
 
-    /// <summary>Sets or recalculates the due date and records when that SLA change occurred.</summary>
-    public void SetDueAtUtc(DateTime dueAtUtc, DateTime nowUtc)
+    /// <summary>Sets the response deadline decided at triage.</summary>
+    public void SetDueDate(DateTime dueAtUtc, DateTime nowUtc)
     {
         DueAtUtc = dueAtUtc;
         UpdatedAtUtc = nowUtc;

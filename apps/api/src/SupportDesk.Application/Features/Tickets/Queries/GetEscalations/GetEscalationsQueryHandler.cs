@@ -1,0 +1,19 @@
+using SupportDesk.Application.Abstractions;
+using SupportDesk.Application.Contracts.Tickets;
+using SupportDesk.Application.Exceptions;
+
+namespace SupportDesk.Application.Features.Tickets.Queries.GetEscalations;
+
+public sealed class GetEscalationsQueryHandler(ITicketQueries tickets)
+{
+    /// <exception cref="NotFoundException">No ticket has this id.</exception>
+    public async Task<IReadOnlyList<EscalationDto>> HandleAsync(int ticketId, CancellationToken ct)
+    {
+        if (!await tickets.ExistsAsync(ticketId, ct))
+        {
+            throw new NotFoundException("Ticket", ticketId);
+        }
+
+        return await tickets.GetEscalationsAsync(ticketId, ct);
+    }
+}

@@ -18,7 +18,7 @@ public sealed class TicketEscalationTests
             .Build();
         var previousDueAtUtc = Now.AddHours(24);
         var nextDueAtUtc = Now.AddHours(5);
-        ticket.SetDueAtUtc(previousDueAtUtc, Now);
+        ticket.SetDueDate(previousDueAtUtc, Now);
 
         var escalation = ticket.Escalate(
             "  Customer impact increased  ",

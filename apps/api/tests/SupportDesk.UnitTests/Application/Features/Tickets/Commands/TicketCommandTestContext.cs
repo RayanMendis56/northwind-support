@@ -5,6 +5,7 @@ using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Features.Tickets.Triage;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
@@ -43,6 +44,9 @@ internal sealed class TicketCommandTestContext
             .Callback<Ticket, CancellationToken>((ticket, _) => AddedTicket = ticket)
             .Returns(Task.CompletedTask);
 
+        Agents.Setup(a => a.GetCandidatesAsync(It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<AgentCandidate>());
+
         // Every command returns the ticket as re-read once its change has been saved.
         TicketQueries.Setup(q => q.GetDetailAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TicketDetailDto
@@ -56,7 +60,8 @@ internal sealed class TicketCommandTestContext
         var getTicket = new GetTicketQueryHandler(TicketQueries.Object);
 
         RaiseTicket = new RaiseTicketCommandHandler(
-            Tickets.Object, Customers.Object, Categories.Object, CreateSlaCalculator(minimumWindowHours),
+            Tickets.Object, Customers.Object, Categories.Object,
+            new TriageService(CreateSlaCalculator(minimumWindowHours), Agents.Object),
             UnitOfWork.Object, Clock, getTicket,
             NullLogger<RaiseTicketCommandHandler>.Instance);
 
