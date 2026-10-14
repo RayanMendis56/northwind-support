@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SupportDesk.Application.Abstractions;
 using SupportDesk.Application.Contracts.Common;
@@ -19,12 +20,11 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, SlaOptions 
 {
     public async Task<PagedResult<TicketListItemDto>> GetPagedAsync(TicketQuery query, CancellationToken ct)
     {
-        var tickets = ApplyFilters(TicketsWithLabels(), query);
-
-        var totalCount = await tickets.CountAsync(ct);
-
         var now = clock.UtcNow;
         var atRisk = slaOptions.AtRiskThresholdPercent;
+        var tickets = ApplyFilters(TicketsWithLabels(), query, now, atRisk);
+
+        var totalCount = await tickets.CountAsync(ct);
 
         var items = await ApplySort(tickets, query)
             .Skip((query.Page - 1) * query.PageSize)
@@ -155,7 +155,9 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, SlaOptions 
 
     private static IQueryable<TicketWithLabels> ApplyFilters(
         IQueryable<TicketWithLabels> source,
-        TicketQuery query)
+        TicketQuery query,
+        DateTime now,
+        int atRiskPercent)
     {
         if (query.Status is { } status)
         {
@@ -196,7 +198,53 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, SlaOptions 
                 || x.Customer.Name.ToLower().Contains(search));
         }
 
+        if (query.SlaStatus is { } slaStatus)
+        {
+            source = source.Where(SlaMatches(slaStatus, now, atRiskPercent));
+        }
+
         return source;
+    }
+
+    /// <summary>
+    /// BR-8 as a SQL-translatable condition. This must stay in step with SlaEvaluator.Evaluate;
+    /// the boundary tests exist to catch drift between the two.
+    /// </summary>
+    private static Expression<Func<TicketWithLabels, bool>> SlaMatches(
+        SlaStatus status,
+        DateTime now,
+        int atRiskPercent)
+    {
+        return status switch
+        {
+            SlaStatus.NotApplicable => x => x.Ticket.DueAtUtc == null,
+
+            SlaStatus.Met => x => x.Ticket.DueAtUtc != null
+                && x.Ticket.ResolvedAtUtc != null
+                && x.Ticket.ResolvedAtUtc <= x.Ticket.DueAtUtc,
+
+            SlaStatus.Breached => x => x.Ticket.DueAtUtc != null
+                && ((x.Ticket.ResolvedAtUtc != null && x.Ticket.ResolvedAtUtc > x.Ticket.DueAtUtc)
+                    || (x.Ticket.ResolvedAtUtc == null && now > x.Ticket.DueAtUtc)),
+
+            SlaStatus.AtRisk => x => x.Ticket.DueAtUtc != null
+                && x.Ticket.ResolvedAtUtc == null
+                && now <= x.Ticket.DueAtUtc
+                && (long)EF.Functions.DateDiffSecond(now, x.Ticket.DueAtUtc.Value) * 100
+                    <= (long)EF.Functions.DateDiffSecond(
+                        x.Ticket.CreatedAtUtc,
+                        x.Ticket.DueAtUtc.Value) * atRiskPercent,
+
+            SlaStatus.WithinSla => x => x.Ticket.DueAtUtc != null
+                && x.Ticket.ResolvedAtUtc == null
+                && now <= x.Ticket.DueAtUtc
+                && (long)EF.Functions.DateDiffSecond(now, x.Ticket.DueAtUtc.Value) * 100
+                    > (long)EF.Functions.DateDiffSecond(
+                        x.Ticket.CreatedAtUtc,
+                        x.Ticket.DueAtUtc.Value) * atRiskPercent,
+
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown SLA status.")
+        };
     }
 
     private static IQueryable<TicketWithLabels> ApplySort(IQueryable<TicketWithLabels> source, TicketQuery query)

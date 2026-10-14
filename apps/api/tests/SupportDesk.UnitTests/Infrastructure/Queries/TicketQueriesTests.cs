@@ -94,6 +94,37 @@ public sealed class TicketQueriesTests
         Assert.All(result.Items, ticket => Assert.Null(ticket.AssignedAgent));
     }
 
+    [Theory]
+    [InlineData(SlaStatus.NotApplicable, 9)]
+    [InlineData(SlaStatus.Met, 1)]
+    [InlineData(SlaStatus.Breached, 1)]
+    public async Task GetPagedAsync_FiltersBySqliteSupportedSlaStatuses(SlaStatus status, int expectedCount)
+    {
+        await using var fixture = await QueryFixture.CreateAsync();
+
+        var result = await fixture.Queries.GetPagedAsync(
+            new TicketQuery { SlaStatus = status },
+            CancellationToken.None);
+
+        Assert.Equal(expectedCount, result.TotalCount);
+        Assert.All(result.Items, ticket => Assert.Equal(status, ticket.SlaStatus));
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_CountsAndPagesBreachedTicketsAfterFiltering()
+    {
+        await using var fixture = await QueryFixture.CreateAsync();
+
+        var result = await fixture.Queries.GetPagedAsync(
+            new TicketQuery { SlaStatus = SlaStatus.Breached, PageSize = 1 },
+            CancellationToken.None);
+
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(1, result.TotalPages);
+        Assert.Single(result.Items);
+        Assert.Equal(SlaStatus.Breached, result.Items[0].SlaStatus);
+    }
+
     [Fact]
     public async Task ExistsAsync_ReportsWhetherTheTicketExists()
     {
@@ -199,6 +230,19 @@ public sealed class TicketQueriesTests
             Db.AddRange(tickets);
             await Db.SaveChangesAsync();
             TicketId = tickets[0].Id;
+
+            var met = CreateTicket(
+                "TCK-1010", "Met SLA", fabrikam.Id, general.Id,
+                TicketPriority.Low, TicketStatus.Resolved, agent.Id, now.AddHours(-1));
+            met.SetDueDate(now.AddHours(2), now);
+
+            var breached = CreateTicket(
+                "TCK-1011", "Breached SLA", fabrikam.Id, general.Id,
+                TicketPriority.Low, TicketStatus.Resolved, agent.Id, now.AddHours(-1));
+            breached.SetDueDate(now.AddHours(-2), now);
+
+            Db.AddRange(met, breached);
+            await Db.SaveChangesAsync();
         }
 
         private static Ticket CreateTicket(
