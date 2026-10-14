@@ -2,9 +2,14 @@ import { Link, useParams } from 'react-router-dom';
 import { ErrorMessage } from '../../components/ErrorMessage';
 import { Spinner } from '../../components/Spinner';
 import { useReferenceData } from '../../hooks/useReferenceData';
+import { CURRENT_ACTOR } from '../../lib/currentActor';
+import type { EscalateResponse } from '../../types/api';
 import { AssignAgentControl } from './components/AssignAgentControl';
+import { EscalationHistory } from './components/EscalationHistory';
+import { EscalationPanel } from './components/EscalationPanel';
 import { StatusActions } from './components/StatusActions';
 import { TicketSummary } from './components/TicketSummary';
+import { useEscalations } from './hooks/useEscalations';
 import { useTicket } from './hooks/useTicket';
 
 export function TicketDetailPage() {
@@ -12,6 +17,7 @@ export function TicketDetailPage() {
   const ticketId = Number(id);
 
   const { data: ticket, isLoading, error, reload, setData } = useTicket(ticketId);
+  const history = useEscalations(ticketId);
   const reference = useReferenceData();
 
   if (Number.isNaN(ticketId)) {
@@ -29,6 +35,11 @@ export function TicketDetailPage() {
   if (!ticket) {
     return null;
   }
+
+  const handleEscalated = (result: EscalateResponse) => {
+    setData(result.ticket);
+    void history.reload();
+  };
 
   return (
     <section>
@@ -51,6 +62,12 @@ export function TicketDetailPage() {
           </div>
 
           <StatusActions ticket={ticket} onUpdated={setData} />
+          <EscalationHistory
+            escalations={history.data}
+            isLoading={history.isLoading}
+            error={history.error}
+            onRetry={() => void history.reload()}
+          />
         </div>
 
         <aside className="detail-layout__side">
@@ -60,6 +77,12 @@ export function TicketDetailPage() {
             ticket={ticket}
             agents={reference.data?.agents ?? []}
             onUpdated={setData}
+          />
+
+          <EscalationPanel
+            ticket={ticket}
+            escalatedBy={CURRENT_ACTOR}
+            onEscalated={handleEscalated}
           />
         </aside>
       </div>

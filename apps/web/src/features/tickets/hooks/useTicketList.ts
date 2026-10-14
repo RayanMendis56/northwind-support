@@ -22,6 +22,7 @@ export const emptyFilters: TicketFilters = {
 
 interface State {
   isLoading: boolean;
+  queryKey?: string;
   data?: PagedResult<TicketListItem>;
   error?: string;
 }
@@ -72,21 +73,21 @@ export function useTicketList() {
       filters.sortDirection,
     ],
   );
+  const queryKey = JSON.stringify(query);
 
   const load = useCallback(
-    async (isCurrent: () => boolean = () => true) => {
-      setState((current) => ({ ...current, isLoading: true, error: undefined }));
-
-      try {
-        const data = await ticketsApi.getTickets(query);
-        if (isCurrent()) setState({ isLoading: false, data, error: undefined });
-      } catch (error) {
-        if (!isCurrent()) return;
-        const message = error instanceof ApiError ? error.message : 'Unable to load tickets.';
-        setState((current) => ({ ...current, isLoading: false, error: message }));
-      }
-    },
-    [query],
+    (isCurrent: () => boolean = () => true) =>
+      ticketsApi.getTickets(query).then(
+        (data) => {
+          if (isCurrent()) setState({ isLoading: false, queryKey, data, error: undefined });
+        },
+        (error: unknown) => {
+          if (!isCurrent()) return;
+          const message = error instanceof ApiError ? error.message : 'Unable to load tickets.';
+          setState((current) => ({ ...current, isLoading: false, queryKey, error: message }));
+        },
+      ),
+    [query, queryKey],
   );
 
   useEffect(() => {
@@ -103,5 +104,17 @@ export function useTicketList() {
 
   const resetFilters = () => setFilters(emptyFilters);
 
-  return { filters, updateFilters, resetFilters, reload: () => load(), ...state };
+  const reload = () => {
+    setState((current) => ({ ...current, isLoading: true, error: undefined }));
+    return load();
+  };
+
+  return {
+    filters,
+    updateFilters,
+    resetFilters,
+    reload,
+    ...state,
+    isLoading: state.isLoading || state.queryKey !== queryKey,
+  };
 }
